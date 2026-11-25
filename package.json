@@ -1,0 +1,25 @@
+{
+  "name": "financas-tv",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Controle de finanças: app de envio de documentos com IA + dashboard para Google TV",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test",
+    "demo": "node scripts/demo-data.js",
+    "pluggy:connect": "node --env-file=.env scripts/pluggy-connect.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.2.1",
+    "express": "^5.3.0",
+    "multer": "^2.5.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16"
+  }
+}

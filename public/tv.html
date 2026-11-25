@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finanças TV</title>
+<style>
+  /* Feito para tela de TV (vista de longe): tema escuro, letras grandes, tudo em vw. */
+  :root {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s2: #d95926; --good: #0ca30c; --bad: #e66767;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--page); color: var(--ink); overflow: hidden;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { display: grid; grid-template-rows: auto auto 1fr 1fr; gap: 1.2vw; padding: 2vw 2.6vw; }
+  header { display: flex; align-items: baseline; gap: 1.5vw; }
+  header h1 { font-size: 2.6vw; margin: 0; font-weight: 700; }
+  header .nav { color: var(--muted); font-size: 1.1vw; }
+  header .right { margin-left: auto; text-align: right; color: var(--ink-2); font-size: 1.1vw; }
+  header .clock { font-size: 2vw; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2vw; }
+  .panel { background: var(--surface); border: max(1px, .07vw) solid var(--border); border-radius: 1vw; padding: 1.3vw 1.6vw; min-height: 0; overflow: hidden; }
+  .tile .label { color: var(--ink-2); font-size: 1.15vw; }
+  .tile .value { font-size: 3vw; font-weight: 700; margin: .3vw 0; white-space: nowrap; }
+  .tile .delta { font-size: 1vw; color: var(--muted); }
+  .delta .up-good, .delta .down-good { color: var(--good); }
+  .delta .up-bad, .delta .down-bad { color: var(--bad); }
+  .neg { color: var(--bad); }
+  .row { display: grid; gap: 1.2vw; min-height: 0; }
+  .row.a { grid-template-columns: 1.4fr 1fr; }
+  .row.b { grid-template-columns: 1fr 1.1fr; }
+  .panel h2 { margin: 0 0 .6vw; font-size: 1.3vw; font-weight: 600; color: var(--ink); display: flex; gap: 1.2vw; align-items: center; }
+  .legend { display: inline-flex; gap: 1.2vw; font-size: .95vw; color: var(--ink-2); font-weight: 400; margin-left: auto; }
+  .legend i { display: inline-block; width: 1.4vw; height: .25vw; border-radius: 1px; vertical-align: middle; margin-right: .4vw; }
+  .chart { width: 100%; height: calc(100% - 2.2vw); }
+  .chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  svg text { font-family: inherit; }
+  .list { font-size: 1.1vw; height: calc(100% - 2.2vw); overflow: hidden; position: relative; }
+  .list .day { display: flex; justify-content: space-between; align-items: baseline; padding: .7vw 0 .3vw; margin-top: .3vw;
+    color: var(--ink-2); font-size: 1vw; font-weight: 600; text-transform: capitalize; border-bottom: max(1px, .07vw) solid var(--axis); }
+  .list .day:first-child { margin-top: 0; padding-top: 0; }
+  .list .day .tot { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 400; text-transform: none; }
+  .legend b { color: var(--ink); font-weight: 600; }
+  .legend > span { white-space: nowrap; }
+  .legend .up-bad { color: var(--bad); } .legend .down-good { color: var(--good); }
+  .panel h2 .range { color: var(--muted); font-weight: 400; font-size: 1vw; }
+  .list .it { display: grid; grid-template-columns: 1fr auto; gap: 1vw; padding: .55vw 0; border-top: max(1px, .07vw) solid var(--grid); align-items: baseline; }
+  .list .day + .it { border-top: 0; }
+  .list .desc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .list .desc small { color: var(--muted); margin-left: .6vw; }
+  .list .date { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .list .amt { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .list .in { color: var(--good); }
+  .empty { color: var(--muted); font-size: 1.2vw; display: grid; place-items: center; height: 100%; text-align: center; }
+  #offline { position: fixed; bottom: 1vw; right: 1vw; background: #3a1414; color: #f0efec; padding: .5vw 1vw; border-radius: .5vw; font-size: 1vw; }
+  #updated.warn { color: #f59e0b; font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">—</h1>
+  <span class="nav">◀ ▶ trocar mês · OK volta ao mês atual</span>
+  <div class="right"><div class="clock" id="clock"></div><div id="updated"></div></div>
+</header>
+
+<section class="tiles">
+  <div class="panel tile"><div class="label">Receitas</div><div class="value" id="t-income">—</div><div class="delta" id="d-income"></div></div>
+  <div class="panel tile"><div class="label">Despesas</div><div class="value" id="t-expense">—</div><div class="delta" id="d-expense"></div></div>
+  <div class="panel tile"><div class="label">Saldo do mês</div><div class="value" id="t-balance">—</div><div class="delta" id="d-balance"></div></div>
+  <div class="panel tile"><div class="label">Salário líquido</div><div class="value" id="t-salary">—</div><div class="delta" id="d-salary"></div></div>
+</section>
+
+<section class="row a">
+  <div class="panel">
+    <h2 id="h-a"></h2>
+    <div class="chart" id="c-cumulative"></div>
+  </div>
+  <div class="panel">
+    <h2>Gastos por categoria</h2>
+    <div class="chart" id="c-category"></div>
+  </div>
+</section>
+
+<section class="row b">
+  <div class="panel">
+    <h2 id="h-b"></h2>
+    <div class="chart" id="c-history"></div>
+  </div>
+  <div class="panel">
+    <h2>Últimos 10 dias <span class="range" id="range"></span><span class="legend" id="pending"></span></h2>
+    <div class="list" id="recent"></div>
+  </div>
+</section>
+
+<div id="offline" hidden>Sem conexão com o servidor — tentando de novo…</div>
+
+<script>
+const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const SHORT = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const brl = (c) => (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const brlShort = (c) => {
+  const v = Math.abs(c / 100);
+  const s = v >= 1e6 ? (v / 1e6).toFixed(1).replace(".", ",") + " mi" : v >= 1e3 ? (v / 1e3).toFixed(v >= 1e4 ? 0 : 1).replace(".", ",") + " mil" : v.toFixed(0);
+  return (c < 0 ? "−" : "") + "R$ " + s;
+};
+const thisMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
+const shift = (m, k) => { const [y, mo] = m.split("-").map(Number); const d = new Date(y, mo - 1 + k, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
+const monthName = (m) => { const [y, mo] = m.split("-").map(Number); return `${MONTHS[mo - 1]} ${y}`; };
+const shortName = (m) => SHORT[Number(m.slice(5)) - 1];
+
+let month = thisMonth();
+let data = null;
+
+// ---------- utilidades de SVG
+const vw = () => window.innerWidth / 100;
+function svgEl(container) {
+  const w = container.clientWidth, h = container.clientHeight;
+  container.innerHTML = `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg"></svg>`;
+  return { svg: container.firstChild, w, h };
+}
+// Espessuras de linha proporcionais à tela (desenhadas para 1600 px de largura): numa TV 4K que
+// renderiza a página em 3840 px, linhas de 1-2 px ficariam finas demais para ler do sofá.
+const lineK = () => Math.max(1, window.innerWidth / 1600);
+function scaleStrokes(html) {
+  const k = lineK();
+  if (k === 1) return html;
+  return html
+    .replace(/stroke-width="([\d.]+)"/g, (_, n) => `stroke-width="${(n * k).toFixed(2)}"`)
+    .replace(/stroke-dasharray="([\d. ]+)"/g, (_, d) => `stroke-dasharray="${d.trim().split(/\s+/).map((n) => (n * k).toFixed(1)).join(" ")}"`)
+    .replace(/<line(?![^>]*stroke-width)/g, `<line stroke-width="${k.toFixed(2)}"`);
+}
+const add = (svg, html) => svg.insertAdjacentHTML("beforeend", scaleStrokes(html));
+function niceMax(v) {
+  if (v <= 0) return 100;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const m of [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (m * p >= v) return m * p;
+  return 10 * p;
+}
+// Barra com cantos arredondados só na ponta (a base fica reta, ancorada no eixo).
+function barPath(x, y, w, h, r, horizontal) {
+  r = Math.min(r * lineK(), r, horizontal ? h / 2 : w / 2, horizontal ? w : h);
+  if (w <= 0 || h <= 0) return "";
+  return horizontal
+    ? `M${x},${y} H${x + w - r} Q${x + w},${y} ${x + w},${y + r} V${y + h - r} Q${x + w},${y + h} ${x + w - r},${y + h} H${x} Z`
+    : `M${x},${y + h} V${y + r} Q${x},${y} ${x + r},${y} H${x + w - r} Q${x + w},${y} ${x + w},${y + r} V${y + h} Z`;
+}
+
+// ---------- gráficos
+const HIST_A = `Gasto acumulado no mês
+  <span class="legend"><span><i style="background:var(--s1)"></i><span id="lg-cur">Este mês</span></span>
+    <span><i style="background:var(--muted)"></i><span id="lg-prev">Mês anterior</span></span></span>`;
+const HIST_B = `Últimos 6 meses
+  <span class="legend"><span><i style="background:var(--s1)"></i>Receitas</span><span><i style="background:var(--s2)"></i>Despesas</span></span>`;
+const pct = (cur, prev) => {
+  if (!prev) return "";
+  const d = (cur - prev) / prev;
+  return ` <span class="${d > 0 ? "up-bad" : "down-good"}">${d > 0 ? "▲" : "▼"} ${Math.abs(d * 100).toFixed(0)}%</span>`;
+};
+const WEEK_LONG = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"];
+
+// ---------- mês atual: gasto de cada dia, com a média diária dos 3 meses anteriores
+function drawDaily() {
+  const c = data.current;
+  // Banco ainda não mandou nada de hoje: "—" em vez de um R$ 0,00 enganoso.
+  const noTodayYet = !c.todayTotal && (data.recentRange?.to || "") < c.today;
+  $("#h-a").innerHTML = `Gasto por dia
+    <span class="legend"><span>hoje <b>${noTodayYet ? "—" : brl(c.todayTotal)}</b></span><span>ontem <b>${brl(c.yesterday)}</b></span>
+      <span>mesmo dia sem. passada <b>${brl(c.sameDayLastWeek)}</b></span>
+      <span><i style="background:var(--muted)"></i>média/dia <b>${brl(c.avgDaily)}</b></span></span>`;
+  const box = $("#c-cumulative");
+  const { svg, w, h } = svgEl(box);
+  const nDays = data.cumulative.current.length;
+  const f = vw(), L = 6.5 * f, R = 1 * f, T = 1.6 * f, B = 2 * f;
+  const max = niceMax(Math.max(...c.days.map((d) => d.total), c.avgDaily, 1));
+  const y = (v) => T + (1 - v / max) * (h - T - B);
+  for (let k = 0; k <= 2; k++) {
+    const v = (max / 2) * k;
+    add(svg, `<line x1="${L}" x2="${w - R}" y1="${y(v)}" y2="${y(v)}" stroke="${k ? "var(--grid)" : "var(--axis)"}"/>
+      <text x="${L - 0.6 * f}" y="${y(v)}" dy="0.35em" text-anchor="end" fill="var(--muted)" font-size="${0.9 * f}">${brlShort(v)}</text>`);
+  }
+  const slot = (w - L - R) / nDays, bw = Math.max(2, slot * 0.7);
+  c.days.forEach((d, i) => {
+    const x = L + slot * i + (slot - bw) / 2, top = y(d.total);
+    const isToday = d.date === c.today;
+    add(svg, `<path d="${barPath(x, top, bw, y(0) - top, 3, false)}" fill="var(--s1)" opacity="${isToday ? 1 : 0.7}"/>`);
+    const wd = (new Date(d.date + "T12:00:00").getDay() + 6) % 7;
+    // Rótulos: segundas-feiras e hoje (sem a segunda que ficaria colada no "hoje").
+    const todayIdx = c.days.length - 1;
+    if (isToday || (wd === 0 && todayIdx - i >= 3)) {
+      add(svg, `<text x="${x + bw / 2}" y="${h - 0.2 * f}" text-anchor="middle" fill="${isToday ? "var(--ink)" : "var(--muted)"}"
+        font-size="${0.9 * f}" font-weight="${isToday ? 700 : 400}">${isToday ? "hoje" : `${WEEK_LONG[wd]} ${Number(d.date.slice(8))}`}</text>`);
+    }
+  });
+  if (c.avgDaily) {
+    add(svg, `<line x1="${L}" x2="${w - R}" y1="${y(c.avgDaily)}" y2="${y(c.avgDaily)}" stroke="var(--muted)" stroke-width="2" stroke-dasharray="6 5"/>`);
+  }
+}
+
+// ---------- mês atual: últimas 8 semanas (seg a dom); a atual é parcial
+function drawWeeks() {
+  const c = data.current, wtd = c.weekToDate;
+  const upTo = WEEK_LONG[wtd.days - 1];
+  const done0 = c.weeks.filter((x) => !x.current);
+  const avg0 = done0.reduce((s, x) => s + x.total, 0) / (done0.length || 1);
+  $("#h-b").innerHTML = `Semanas
+    <span class="legend"><span>esta <b>${brlShort(wtd.current)}</b> · passada até ${upTo} <b>${brlShort(wtd.previous)}</b>${pct(wtd.current, wtd.previous)}</span>
+      <span><i style="background:var(--muted)"></i>média <b>${brlShort(Math.round(avg0))}</b></span></span>`;
+  const box = $("#c-history");
+  const { svg, w, h } = svgEl(box);
+  const f = vw(), L = 6.5 * f, T = 1.8 * f, B = 2 * f;
+  const done = c.weeks.filter((x) => !x.current);
+  const avg = done.reduce((s, x) => s + x.total, 0) / (done.length || 1);
+  const max = niceMax(Math.max(...c.weeks.map((x) => x.total), avg, 1));
+  const y = (v) => T + (1 - v / max) * (h - T - B);
+  for (let k = 0; k <= 2; k++) {
+    const v = (max / 2) * k;
+    add(svg, `<line x1="${L}" x2="${w}" y1="${y(v)}" y2="${y(v)}" stroke="${k ? "var(--grid)" : "var(--axis)"}"/>
+      <text x="${L - 0.6 * f}" y="${y(v)}" dy="0.35em" text-anchor="end" fill="var(--muted)" font-size="${0.9 * f}">${brlShort(v)}</text>`);
+  }
+  const slot = (w - L) / c.weeks.length, bw = Math.min(slot * 0.55, 4 * f);
+  c.weeks.forEach((wk, i) => {
+    const cx = L + slot * i + slot / 2, top = y(wk.total);
+    add(svg, `<path d="${barPath(cx - bw / 2, top, bw, y(0) - top, 4, false)}" fill="var(--s2)" opacity="${wk.current ? 1 : 0.55}"/>
+      <text x="${cx}" y="${top - 0.5 * f}" text-anchor="middle" font-size="${0.9 * f}" fill="${wk.current ? "var(--ink)" : "var(--ink-2)"}"
+        font-weight="${wk.current ? 700 : 400}">${brlShort(wk.total)}</text>
+      <text x="${cx}" y="${h - 0.2 * f}" text-anchor="middle" font-size="${0.9 * f}" fill="${wk.current ? "var(--ink)" : "var(--muted)"}"
+        font-weight="${wk.current ? 700 : 400}">${wk.current ? "esta" : `${Number(wk.start.slice(8))}/${wk.start.slice(5, 7)}`}</text>`);
+  });
+  // A semana passada até o mesmo dia: marca na barra dela, para comparar com a atual (parcial).
+  const prevIdx = c.weeks.length - 2, px = L + slot * prevIdx + slot / 2;
+  if (wtd.previous) add(svg, `<line x1="${px - bw / 2 - 0.3 * f}" x2="${px + bw / 2 + 0.3 * f}" y1="${y(wtd.previous)}" y2="${y(wtd.previous)}"
+    stroke="var(--ink)" stroke-width="2" stroke-dasharray="4 3"/>`);
+  add(svg, `<line x1="${L}" x2="${w}" y1="${y(avg)}" y2="${y(avg)}" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="6 5"/>`);
+}
+
+function drawCumulative() {
+  $("#h-a").innerHTML = HIST_A;
+  const box = $("#c-cumulative");
+  const { svg, w, h } = svgEl(box);
+  const cur = data.cumulative.current, prev = data.cumulative.previous;
+  // No mês corrente, a linha para em "hoje".
+  const isNow = month === thisMonth();
+  const lastDay = isNow ? new Date().getDate() : cur.length;
+  const curShown = cur.slice(0, lastDay);
+  const max = niceMax(Math.max(...curShown, ...prev, 1));
+  const f = vw(), L = 7 * f, R = 4.5 * f, T = 1 * f, B = 2 * f;
+  const days = Math.max(cur.length, prev.length);
+  const x = (i) => L + (i / (days - 1)) * (w - L - R);
+  const y = (v) => T + (1 - v / max) * (h - T - B);
+
+  for (let k = 0; k <= 4; k++) {
+    const v = (max / 4) * k, yy = y(v);
+    add(svg, `<line x1="${L}" x2="${w - R}" y1="${yy}" y2="${yy}" stroke="${k ? "var(--grid)" : "var(--axis)"}" stroke-width="1"/>
+      <text x="${L - 0.6 * f}" y="${yy}" dy="0.35em" text-anchor="end" fill="var(--muted)" font-size="${0.9 * f}">${brlShort(v)}</text>`);
+  }
+  for (const d of [1, 10, 20, days]) {
+    add(svg, `<text x="${x(d - 1)}" y="${h - 0.2 * f}" text-anchor="middle" fill="var(--muted)" font-size="${0.9 * f}">dia ${d}</text>`);
+  }
+  const line = (arr) => arr.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+  add(svg, `<path d="${line(prev)}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="6 5"/>`);
+  if (curShown.length) {
+    add(svg, `<path d="${line(curShown)}" fill="none" stroke="var(--s1)" stroke-width="3" stroke-linejoin="round"/>`);
+    const li = curShown.length - 1, lv = curShown[li];
+    // Comparação justa: mesmo dia do mês anterior.
+    const prevSame = prev[Math.min(li, prev.length - 1)] || 0;
+    add(svg, `<circle cx="${x(li)}" cy="${y(lv)}" r="${0.45 * f}" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+      <text x="${x(li) + 0.8 * f}" y="${y(lv)}" dy="0.35em" fill="var(--ink)" font-size="${1.1 * f}" font-weight="700">${brlShort(lv)}</text>`);
+    if (isNow && prevSame) {
+      const diff = (lv - prevSame) / prevSame;
+      $("#lg-cur").textContent = `Este mês (${diff >= 0 ? "+" : "−"}${Math.abs(diff * 100).toFixed(0)}% vs. mesmo dia do mês passado)`;
+    } else $("#lg-cur").textContent = "Este mês";
+  }
+  $("#lg-prev").textContent = monthName(data.previous.month).split(" ")[0];
+}
+
+function drawCategories() {
+  const box = $("#c-category");
+  let cats = data.byCategory;
+  if (!cats.length) { box.innerHTML = `<div class="empty">Nenhum gasto neste mês ainda.</div>`; return; }
+  const MAXN = 7;
+  if (cats.length > MAXN) {
+    const rest = cats.slice(MAXN - 1).reduce((s, c) => s + c.total, 0);
+    cats = [...cats.slice(0, MAXN - 1), { category: "Demais", total: rest }];
+  }
+  const { svg, w, h } = svgEl(box);
+  const f = vw(), labelW = 11 * f, valueW = 9 * f;
+  const rowH = Math.min(h / cats.length, 4.2 * f), barH = Math.min(rowH * 0.55, 1.6 * f);
+  const max = Math.max(...cats.map((c) => c.total));
+  const total = data.expense || 1;
+  cats.forEach((c, i) => {
+    const yy = i * rowH + (rowH - barH) / 2;
+    const bw = (c.total / max) * (w - labelW - valueW);
+    add(svg, `<text x="0" y="${yy + barH / 2}" dy="0.35em" fill="var(--ink-2)" font-size="${1.05 * f}">${esc(c.category)}</text>
+      <path d="${barPath(labelW, yy, bw, barH, 4, true)}" fill="var(--s1)"/>
+      <text x="${labelW + bw + 0.6 * f}" y="${yy + barH / 2}" dy="0.35em" fill="var(--ink)" font-size="${1.05 * f}" font-weight="600">${brlShort(c.total)}
+        <tspan fill="var(--muted)" font-weight="400"> ${Math.round((c.total / total) * 100)}%</tspan></text>`);
+  });
+}
+
+function drawHistory() {
+  $("#h-b").innerHTML = HIST_B;
+  const box = $("#c-history");
+  const { svg, w, h } = svgEl(box);
+  const hist = data.history;
+  const f = vw(), L = 6.5 * f, T = 1.6 * f, B = 2 * f;
+  const max = niceMax(Math.max(...hist.flatMap((m) => [m.income, m.expense]), 1));
+  const y = (v) => T + (1 - v / max) * (h - T - B);
+  for (let k = 0; k <= 2; k++) {
+    const v = (max / 2) * k;
+    add(svg, `<line x1="${L}" x2="${w}" y1="${y(v)}" y2="${y(v)}" stroke="${k ? "var(--grid)" : "var(--axis)"}"/>
+      <text x="${L - 0.6 * f}" y="${y(v)}" dy="0.35em" text-anchor="end" fill="var(--muted)" font-size="${0.9 * f}">${brlShort(v)}</text>`);
+  }
+  const groupW = (w - L) / hist.length, barW = Math.min(groupW * 0.32, 3 * f), gap = 2;
+  hist.forEach((m, i) => {
+    const cx = L + groupW * i + groupW / 2;
+    const selected = m.month === month;
+    [[m.income, "var(--s1)", cx - barW - gap / 2], [m.expense, "var(--s2)", cx + gap / 2]].forEach(([v, col, bx]) => {
+      const top = y(v);
+      add(svg, `<path d="${barPath(bx, top, barW, y(0) - top, 4, false)}" fill="${col}" opacity="${selected ? 1 : 0.55}"/>`);
+    });
+    add(svg, `<text x="${cx}" y="${h - 0.2 * f}" text-anchor="middle" fill="${selected ? "var(--ink)" : "var(--muted)"}"
+      font-size="${1 * f}" font-weight="${selected ? 700 : 400}">${shortName(m.month)}</text>`);
+    if (selected) {
+      const bal = m.income - m.expense;
+      add(svg, `<text x="${cx}" y="${Math.min(y(m.income), y(m.expense)) - 0.6 * f}" text-anchor="middle" font-size="${0.95 * f}"
+        font-weight="600" fill="${bal < 0 ? "var(--bad)" : "var(--ink)"}">saldo ${brlShort(bal)}</text>`);
+    }
+  });
+}
+
+const WEEK = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+const ddmm = (d) => `${d.slice(8)}/${d.slice(5, 7)}`;
+function drawRecent() {
+  const el = $("#recent");
+  const r = data.recentRange || {};
+  $("#range").textContent = r.from ? `${ddmm(r.from)} a ${ddmm(r.to)}` : "";
+  if (!data.recent.length) {
+    el.innerHTML = `<div class="empty">Envie um extrato ou fatura pelo celular para começar.</div>`;
+  } else {
+    const byDay = new Map();
+    for (const t of data.recent) (byDay.get(t.date) || byDay.set(t.date, []).get(t.date)).push(t);
+    el.innerHTML = [...byDay].map(([date, txs]) => {
+      const out = txs.filter((t) => t.direction === "saida").reduce((s, t) => s + t.amount_cents, 0);
+      const inn = txs.filter((t) => t.direction === "entrada").reduce((s, t) => s + t.amount_cents, 0);
+      const wd = WEEK[new Date(date + "T12:00:00").getDay()];
+      const tot = [out && `gastos ${brl(out)}`, inn && `entradas ${brl(inn)}`].filter(Boolean).join(" · ");
+      return `<div class="day"><span>${wd}, ${ddmm(date)}</span><span class="tot">${tot}</span></div>` + txs.map((t) => `
+        <div class="it">
+          <span class="desc">${esc(t.description)}<small>${esc(t.category)}${t.source === "manual" && !t.reconciled ? " · manual" : ""}</small></span>
+          <span class="amt ${t.direction === "entrada" ? "in" : ""}">${t.direction === "entrada" ? "+" : "−"}${brl(t.amount_cents)}</span>
+        </div>`).join("");
+    }).join("");
+  }
+  $("#pending").textContent = data.pendingManual
+    ? `${data.pendingManual} lançamento(s) manual(is) aguardando extrato/fatura` : "";
+}
+
+// Rolagem automática da lista (10 dias não cabem no painel): desce devagar, para no fim,
+// volta ao topo e recomeça. A posição é mantida quando os dados se atualizam a cada 30 s.
+const scroller = { pauseUntil: performance.now() + 4000, back: false };
+function autoScroll(now) {
+  const el = $("#recent");
+  const max = el.scrollHeight - el.clientHeight;
+  if (max > 2 && now >= scroller.pauseUntil) {
+    if (scroller.back) {
+      el.scrollTop = 0; scroller.pos = 0; scroller.back = false; scroller.pauseUntil = now + 4000;
+    } else {
+      // Posição fracionária guardada à parte (scrollTop arredonda). Velocidade pelo tempo, não por
+      // quadro: ~1,8 vw por segundo (uma linha a cada ~1,5 s) em qualquer TV.
+      const dt = Math.min(100, now - (scroller.last ?? now));
+      scroller.pos = Math.min(max, (scroller.pos ?? el.scrollTop) + vw() * 1.8 * dt / 1000);
+      el.scrollTop = scroller.pos;
+      if (scroller.pos >= max) { scroller.back = true; scroller.pauseUntil = now + 5000; }
+    }
+  }
+  scroller.last = now;
+  requestAnimationFrame(autoScroll);
+}
+requestAnimationFrame(autoScroll);
+
+function delta(el, cur, prev, higherIsGood) {
+  if (!prev) { el.textContent = "sem dados do mês anterior"; return; }
+  const d = (cur - prev) / Math.abs(prev);
+  const up = d >= 0;
+  const cls = (up ? "up-" : "down-") + (up === higherIsGood ? "good" : "bad");
+  el.innerHTML = `<span class="${cls}">${up ? "▲" : "▼"} ${Math.abs(d * 100).toFixed(0)}%</span> vs. ${shortName(data.previous.month)} (${brl(prev)})`;
+}
+
+function render() {
+  $("#title").textContent = monthName(month);
+  $("#t-income").textContent = brl(data.income);
+  $("#t-expense").textContent = brl(data.expense);
+  $("#t-balance").textContent = brl(data.balance);
+  $("#t-balance").className = "value" + (data.balance < 0 ? " neg" : "");
+  $("#t-salary").textContent = data.salary ? brl(data.salary) : "—";
+  const p = data.previous;
+  delta($("#d-income"), data.income, p.income, true);
+  delta($("#d-expense"), data.expense, p.expense, false);
+  $("#d-balance").textContent = data.income ? `${Math.round((data.balance / data.income) * 100)}% da renda ${data.balance >= 0 ? "sobrou" : "faltou"}` : "";
+  $("#d-salary").textContent = data.salary && data.expense ? `despesas = ${Math.round((data.expense / data.salary) * 100)}% do salário` : "";
+  $("#updated").classList.toggle("warn", !!data.syncWarnings?.length);
+  $("#updated").textContent = data.syncWarnings?.length
+    ? "⚠ Bancos sem atualizar: " + data.syncWarnings[0].replace(/ Autorize de novo:.*/, " Autorize de novo pelo PC.")
+    : data.lastSync
+    ? `Bancos atualizados em ${new Date(data.lastSync).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
+    : data.lastImport ? `Última importação: ${data.lastImport.institution || data.lastImport.file_name}` : "";
+  const keep = $("#recent").scrollTop;
+  // Mês atual: comparativos de dias e semanas. Meses passados: acumulado e últimos 6 meses.
+  if (data.current) { drawDaily(); drawWeeks(); } else { drawCumulative(); drawHistory(); }
+  drawCategories(); drawRecent();
+  $("#recent").scrollTop = keep;
+}
+
+// Senha: na TV basta digitar uma vez; o aparelho fica lembrado por 1 ano.
+function showLogin() {
+  if ($("#login")) return;
+  document.body.insertAdjacentHTML("beforeend", `
+    <form id="login" style="position:fixed;inset:0;background:var(--page);display:grid;place-items:center;z-index:9">
+      <div class="panel" style="width:36vw;text-align:center">
+        <h1 style="font-size:2.4vw;margin:0 0 1.5vw">Finanças</h1>
+        <input name="password" type="password" placeholder="Senha" autofocus required
+          style="width:100%;font-size:1.8vw;padding:1vw;border-radius:.6vw;border:2px solid var(--axis);background:var(--page);color:var(--ink)">
+        <button style="margin-top:1.2vw;width:100%;font-size:1.6vw;padding:.9vw;border:0;border-radius:.6vw;background:var(--s1);color:#fff">Entrar</button>
+        <div id="login-msg" style="color:var(--bad);font-size:1.3vw;margin-top:1vw"></div>
+      </div>
+    </form>`);
+  $("#login").onsubmit = async (e) => {
+    e.preventDefault();
+    const r = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: e.target.password.value }) });
+    if (r.ok) { $("#login").remove(); load(); } else $("#login-msg").textContent = "Senha incorreta.";
+  };
+}
+
+async function load() {
+  if ($("#login")) return;
+  try {
+    const r = await fetch("/api/summary?month=" + month);
+    if (r.status === 401) { showLogin(); return; }
+    if (!r.ok) throw new Error();
+    data = await r.json();
+    $("#offline").hidden = true;
+    render();
+  } catch { $("#offline").hidden = false; }
+}
+
+// Controle remoto: setas trocam o mês, OK/Enter volta ao mês atual.
+document.addEventListener("keydown", (e) => {
+  if ($("#login")) return;
+  if (e.key === "ArrowLeft") month = shift(month, -1);
+  else if (e.key === "ArrowRight") { if (month < thisMonth()) month = shift(month, 1); else return; }
+  else if (e.key === "Enter" || e.key === " ") month = thisMonth();
+  else return;
+  e.preventDefault();
+  $("#recent").scrollTop = 0; scroller.pos = 0; scroller.back = false; scroller.pauseUntil = performance.now() + 4000;
+  load();
+});
+
+// Atualiza a cada 30 segundos (pega o que foi importado pelo celular).
+setInterval(load, 30 * 1000);
+let resizeT; window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => data && render(), 150); });
+setInterval(() => { $("#clock").textContent = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); }, 1000);
+$("#clock").textContent = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+load();
+
+// Mantém a tela ligada (sem protetor de tela) enquanto o painel está aberto, nos navegadores que
+// permitem. O pedido cai quando a aba sai de foco; refaz ao voltar.
+async function keepAwake() {
+  try { if ("wakeLock" in navigator && document.visibilityState === "visible") await navigator.wakeLock.request("screen"); } catch {}
+}
+document.addEventListener("visibilitychange", keepAwake);
+keepAwake();
+</script>
+</body>
+</html>

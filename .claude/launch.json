@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "financas",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--env-file=.env", "src/server.js"],
+      "port": 3000
+    },
+    {
+      "name": "financas-demo",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--env-file-if-exists=.env", "src/server.js"],
+      "env": { "PGLITE_DIR": "data/demo-pg", "PORT": "3123", "APP_PASSWORD": "demo", "DATABASE_URL": "" },
+      "port": 3123
+    }
+  ]
+}

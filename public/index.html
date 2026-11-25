@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a1a19">
+<link rel="manifest" href="manifest.json">
+<title>Minhas Finanças</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --line: #e1e0d9; --accent: #2a78d6; --good: #006300; --bad: #d03b3b; --warn-bg: #fff4d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { color-scheme: dark;
+      --bg: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+      --line: #2c2c2a; --accent: #3987e5; --good: #0ca30c; --bad: #e66767; --warn-bg: #3a3012; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; padding-bottom: 80px; }
+  header { padding: 20px 16px 8px; }
+  h1 { font-size: 22px; margin: 0; }
+  h2 { font-size: 17px; margin: 0 0 12px; }
+  main { padding: 0 16px; max-width: 640px; margin: 0 auto; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 12px 0; }
+  .drop { display: block; text-align: center; border: 2px dashed var(--line); border-radius: 14px;
+    padding: 28px 16px; cursor: pointer; }
+  .drop strong { display: block; font-size: 18px; margin-bottom: 4px; }
+  .drop span { color: var(--ink-2); font-size: 14px; }
+  input, select, button { font: inherit; }
+  input, select { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--ink); }
+  label.f { display: block; font-size: 13px; color: var(--ink-2); margin: 10px 0 4px; }
+  .row { display: flex; gap: 10px; } .row > * { flex: 1; }
+  button.primary { width: 100%; margin-top: 14px; padding: 12px; border: 0; border-radius: 10px;
+    background: var(--accent); color: #fff; font-weight: 600; }
+  button.ghost { background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: 6px 10px; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .seg button { flex: 1; padding: 10px; border: 0; background: none; color: var(--ink-2); }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .tx { display: flex; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+  .tx:first-child { border-top: 0; }
+  .tx .d { flex: 1; min-width: 0; }
+  .tx .d b { display: block; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tx .d small { color: var(--muted); }
+  .amt { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+  .in { color: var(--good); }
+  .tbtn { min-width: 36px; }
+  .filters { margin-top: 6px; }
+  .filters .row > div { min-width: 0; }
+  .filters input[type=date] { min-width: 0; }
+  #f-clear { margin-top: 10px; width: 100%; }
+  /* Categoria editável: parece um selo, abre a lista ao tocar. */
+  select.cat { width: auto; max-width: 100%; display: block; margin-top: 4px; padding: 3px 22px 3px 8px; font-size: 12px; border-radius: 6px;
+    border: 1px dashed var(--line); background: transparent; color: var(--ink-2); vertical-align: baseline; }
+  select.cat:focus { border-style: solid; border-color: var(--accent); outline: none; }
+  .saved { color: var(--good); font-size: 12px; margin-left: 4px; }
+  .tbtn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tx.is-transfer .amt { color: var(--muted); text-decoration: line-through; font-weight: 500; }
+  .badge.transfer { border-color: var(--accent); color: var(--accent); }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--line); color: var(--ink-2); }
+  .badge.conciliar { border-color: var(--good); color: var(--good); }
+  .badge.duplicado { border-color: var(--muted); }
+  .warn { background: var(--warn-bg); border-radius: 10px; padding: 10px 12px; font-size: 14px; margin: 8px 0; }
+  .err { color: var(--bad); font-weight: 500; }
+  .muted { color: var(--muted); font-size: 14px; }
+  .spinner { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 10px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .rev select { width: auto; padding: 4px 6px; font-size: 13px; }
+  .rev .tx { flex-wrap: wrap; }
+  .rev .ctrl { display: flex; gap: 6px; width: 100%; padding-left: 0; }
+  .rev .ignored { opacity: .45; }
+  nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: var(--surface);
+    border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+  nav button { flex: 1; padding: 14px 4px; border: 0; background: none; color: var(--ink-2); font-size: 14px; }
+  nav button.on { color: var(--accent); font-weight: 600; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header><h1>Minhas Finanças</h1></header>
+<main>
+  <!-- ENVIAR -->
+  <section id="tab-enviar">
+    <div class="card">
+      <label class="drop">
+        <input id="file" type="file" accept=".pdf,.csv,.ofx,.qfx,.txt,image/*" hidden>
+        <strong>Enviar documento</strong>
+        <span>Holerite, extrato ou fatura de cartão — PDF, foto, CSV ou OFX</span>
+      </label>
+      <div id="status" class="muted" style="margin-top:12px"></div>
+    </div>
+    <div id="review" class="card rev" hidden></div>
+    <div id="banks" class="card" hidden>
+      <div class="row" style="align-items:center">
+        <h2 style="margin:0">Bancos (Open Finance)</h2>
+        <button class="ghost" id="sync-now" style="flex:0 0 auto">Sincronizar agora</button>
+      </div>
+      <div id="sync-info" class="muted" style="margin-top:8px"></div>
+    </div>
+  </section>
+
+  <!-- LANÇAR -->
+  <section id="tab-lancar" hidden>
+    <form id="manual" class="card">
+      <h2>Lançamento manual</h2>
+      <div class="seg" id="dir">
+        <button type="button" data-v="saida" class="on">Gasto</button>
+        <button type="button" data-v="entrada">Recebimento</button>
+      </div>
+      <label class="f">Valor (R$)</label>
+      <input name="amount" inputmode="decimal" placeholder="0,00" required>
+      <label class="f">Descrição</label>
+      <input name="description" placeholder="Ex.: Padaria, Uber, Aluguel" required>
+      <div class="row">
+        <div><label class="f">Data</label><input name="date" type="date" required></div>
+        <div><label class="f">Categoria</label><select name="category"></select></div>
+      </div>
+      <button class="primary">Salvar</button>
+      <p class="muted">Quando o extrato ou a fatura chegar, este lançamento é reconhecido automaticamente e não é contado duas vezes.</p>
+      <div id="manual-msg"></div>
+    </form>
+  </section>
+
+  <!-- LANÇAMENTOS -->
+  <section id="tab-lista" hidden>
+    <div class="card">
+      <div class="row" style="align-items:center">
+        <h2 style="margin:0">Lançamentos</h2>
+        <input id="month" type="month" style="max-width:170px">
+      </div>
+      <div class="filters">
+        <div class="row">
+          <div><label class="f" for="f-from">De</label><input id="f-from" type="date"></div>
+          <div><label class="f" for="f-to">Até</label><input id="f-to" type="date"></div>
+        </div>
+        <div class="row">
+          <div><label class="f" for="f-cat">Categoria</label><select id="f-cat"><option value="">Todas</option></select></div>
+          <div><label class="f" for="f-bank">Banco</label><select id="f-bank"><option value="">Todos</option></select></div>
+        </div>
+        <button type="button" class="ghost" id="f-clear" hidden>Limpar filtros</button>
+      </div>
+      <div id="list-totals" class="muted" style="margin-top:10px"></div>
+      <p class="muted" style="font-size:13px;margin:6px 0 0">Toque em ⇄ para marcar um lançamento como transferência entre contas suas (ex.: Pix para sua conta em outro banco). Ele deixa de contar como receita ou despesa.</p>
+      <div id="list" style="margin-top:10px"></div>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button data-tab="enviar" class="on">Enviar</button>
+  <button data-tab="lancar">Lançar</button>
+  <button data-tab="lista">Lançamentos</button>
+</nav>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const brl = (cents) => (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const fmtDate = (iso) => iso ? iso.split("-").reverse().join("/") : "";
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const TYPE_LABEL = { holerite: "Holerite", extrato: "Extrato bancário", fatura: "Fatura de cartão" };
+const ACTION_LABEL = { novo: "Novo", conciliar: "Já lançado à mão", duplicado: "Já importado", ignorar: "Ignorar" };
+let CATEGORIES = [];
+
+async function api(url, opts) {
+  const r = await fetch(url, opts);
+  const body = await r.json().catch(() => ({}));
+  if (r.status === 401 && body.error === "login") { showLogin(); throw new Error("Entre com a senha para continuar."); }
+  if (r.status === 413) throw new Error("Arquivo grande demais (máx. 4 MB). Divida o PDF em partes.");
+  if (!r.ok) throw new Error(body.error || "Falha na comunicação com o servidor.");
+  return body;
+}
+
+// ---- Senha de acesso
+function showLogin() {
+  if ($("#login")) return;
+  document.body.insertAdjacentHTML("beforeend", `
+    <form id="login" style="position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;padding:16px;z-index:9">
+      <div class="card" style="width:100%;max-width:360px">
+        <h2>Minhas Finanças</h2>
+        <label class="f">Senha</label>
+        <input name="password" type="password" autocomplete="current-password" required autofocus>
+        <button class="primary">Entrar</button>
+        <div id="login-msg" class="err" style="margin-top:8px"></div>
+      </div>
+    </form>`);
+  $("#login").onsubmit = async (e) => {
+    e.preventDefault();
+    const r = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: e.target.password.value }) });
+    if (r.ok) location.reload();
+    else $("#login-msg").textContent = "Senha incorreta.";
+  };
+}
+
+// ---- Fotos do celular passam de 4 MB fácil: reduz para ~2000px em JPEG antes de enviar.
+async function shrinkImage(file) {
+  if (!file.type.startsWith("image/") || file.size < 1.5 * 1024 * 1024) return file;
+  try {
+    const img = await createImageBitmap(file);
+    const scale = Math.min(1, 2000 / Math.max(img.width, img.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(img.width * scale);
+    canvas.height = Math.round(img.height * scale);
+    canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((ok) => canvas.toBlob(ok, "image/jpeg", 0.85));
+    return new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch { return file; }
+}
+
+// ---- Abas
+document.querySelectorAll("nav button").forEach((b) => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("on", x === b));
+  for (const t of ["enviar", "lancar", "lista"]) $("#tab-" + t).hidden = t !== b.dataset.tab;
+  if (b.dataset.tab === "lista") loadList();
+});
+
+// ---- Envio de arquivo
+$("#file").onchange = async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  $("#review").hidden = true;
+  $("#status").innerHTML = `<div class="spinner"></div><div style="text-align:center">Lendo <b>${esc(file.name)}</b>…<br>Pode levar até um minuto.</div>`;
+  try {
+    const fd = new FormData();
+    const toSend = await shrinkImage(file);
+    if (toSend.size > 4.4 * 1024 * 1024) throw new Error("Arquivo maior que 4 MB. Divida o PDF em partes menores.");
+    fd.append("file", toSend);
+    renderReview(await api("/api/upload", { method: "POST", body: fd }));
+    $("#status").textContent = "";
+  } catch (err) {
+    $("#status").innerHTML = `<span class="err">${esc(err.message)}</span>`;
+  }
+};
+
+function renderReview(r) {
+  const el = $("#review");
+  const decisions = r.items.map((it) => ({ action: it.action === "duplicado" ? "ignorar" : it.action, category: it.category }));
+  const counts = (k) => r.items.filter((i) => i.action === k).length;
+  const period = r.period_start ? `${fmtDate(r.period_start)} a ${fmtDate(r.period_end)}` : "";
+
+  el.innerHTML = `
+    <h2>${TYPE_LABEL[r.document_type] || "Documento"}${r.institution ? " · " + esc(r.institution) : ""}</h2>
+    <div class="muted">${esc(period)} — ${r.items.length} lançamento(s): ${counts("novo")} novo(s),
+      ${counts("conciliar")} já lançado(s) à mão, ${counts("duplicado")} já importado(s)</div>
+    ${r.payslip ? `<div class="card" style="margin:12px 0">
+        <div class="muted">Salário líquido${r.payslip.employer ? " · " + esc(r.payslip.employer) : ""}</div>
+        <div style="font-size:28px;font-weight:700">${brl(Math.round(r.payslip.net * 100))}</div>
+        ${r.payslip.gross != null ? `<div class="muted">Bruto ${brl(Math.round(r.payslip.gross * 100))} · Descontos ${brl(Math.round((r.payslip.total_deductions || 0) * 100))}</div>` : ""}
+      </div>` : ""}
+    ${r.warnings.map((w) => `<div class="warn">⚠ ${esc(w)}</div>`).join("")}
+    <div id="rev-items" style="margin-top:8px"></div>
+    <button class="primary" id="confirm">Confirmar importação</button>
+    <button class="ghost" id="cancel" style="width:100%;margin-top:8px">Cancelar</button>`;
+
+  const list = $("#rev-items", el);
+  r.items.forEach((it, i) => {
+    const row = document.createElement("div");
+    row.className = "tx";
+    const options = ["novo", ...(it.match ? [it.action] : []), "ignorar"].filter((v, k, a) => a.indexOf(v) === k);
+    row.innerHTML = `
+      <div class="d"><b>${esc(it.description)}${it.is_transfer ? ' <span class="badge">transferência</span>' : ""}</b>
+        <small>${fmtDate(it.date)}${it.installment ? " · parcela " + esc(it.installment) : ""}
+        ${it.match ? `<br>↳ ${it.action === "conciliar" ? "corresponde ao seu lançamento" : "já existe"} “${esc(it.match.description)}” de ${fmtDate(it.match.date)}` : ""}</small></div>
+      <div class="amt ${it.direction === "entrada" ? "in" : ""}">${it.direction === "entrada" ? "+" : "−"}${brl(it.amount_cents)}</div>
+      <div class="ctrl">
+        <select data-k="action">${options.map((o) => `<option value="${o}" ${o === decisions[i].action ? "selected" : ""}>${ACTION_LABEL[o]}</option>`).join("")}</select>
+        <select data-k="category">${CATEGORIES.map((c) => `<option ${c === it.category ? "selected" : ""}>${c}</option>`).join("")}</select>
+      </div>`;
+    row.querySelectorAll("select").forEach((s) => s.onchange = () => {
+      decisions[i][s.dataset.k] = s.value;
+      row.classList.toggle("ignored", decisions[i].action === "ignorar");
+    });
+    row.classList.toggle("ignored", decisions[i].action === "ignorar");
+    list.append(row);
+  });
+
+  $("#cancel", el).onclick = () => { el.hidden = true; };
+  $("#confirm", el).onclick = async (ev) => {
+    ev.target.disabled = true;
+    try {
+      const res = await api(`/api/upload/${r.token}/commit`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: decisions.map((d, index) => ({ index, ...d })) }),
+      });
+      el.hidden = true;
+      $("#status").innerHTML = `✅ Importado: ${res.novo} novo(s), ${res.conciliar} conciliado(s), ${res.ignorado} ignorado(s). A TV atualiza em até 30 segundos.`;
+    } catch (err) {
+      ev.target.disabled = false;
+      $("#status").innerHTML = `<span class="err">${esc(err.message)}</span>`;
+    }
+  };
+  el.hidden = false;
+}
+
+// ---- Open Finance (Meu Pluggy)
+function renderSync(s) {
+  $("#banks").hidden = !s.configured;
+  if (!s.configured) return;
+  const r = s.result;
+  const when = s.last_sync_at ? new Date(s.last_sync_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "nunca";
+  $("#sync-info").innerHTML = `Última sincronização: <b>${when}</b>` +
+    (r ? `<br>${r.novo} novo(s), ${r.conciliar} conciliado(s) com lançamentos manuais, ${r.ignorado} já existente(s)` +
+      (r.pendentes ? `, ${r.pendentes} pendente(s) no banco` : "") +
+      (r.contas?.length ? `<br>Contas: ${esc(r.contas.join(", "))}` : "") : "") +
+    (r?.avisos || []).map((a) => `<div class="warn">⚠ ${esc(a)}</div>`).join("") +
+    `<br><small>Os bancos atualizam no Meu Pluggy a cada 24 h; o app busca todo dia às 8h.</small>`;
+}
+async function loadSync() { try { renderSync(await api("/api/sync/status")); } catch {} }
+$("#sync-now").onclick = async (e) => {
+  e.target.disabled = true;
+  $("#sync-info").innerHTML = `<div class="spinner"></div>`;
+  try {
+    await api("/api/sync", { method: "POST" });
+    await loadSync();
+  } catch (err) {
+    $("#sync-info").innerHTML = `<span class="err">${esc(err.message)}</span>`;
+  }
+  e.target.disabled = false;
+};
+
+// ---- Lançamento manual
+let direction = "saida";
+$("#dir").onclick = (e) => {
+  if (!e.target.dataset.v) return;
+  direction = e.target.dataset.v;
+  $("#dir").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b === e.target));
+};
+$("#manual").onsubmit = async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const amount = Number(f.amount.value.replace(/\./g, "").replace(",", "."));
+  try {
+    await api("/api/transactions", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: f.date.value, description: f.description.value, amount, direction, category: f.category.value }),
+    });
+    $("#manual-msg").innerHTML = `✅ Salvo: ${esc(f.description.value)} ${brl(Math.round(amount * 100))}`;
+    f.amount.value = ""; f.description.value = "";
+  } catch (err) {
+    $("#manual-msg").innerHTML = `<span class="err">${esc(err.message)}</span>`;
+  }
+};
+
+// ---- Lista
+let listRows = [];
+
+// Totais do mês sem as transferências (o mesmo critério do painel da TV).
+function renderTotals() {
+  const sum = (dir) => listRows.filter((t) => t.direction === dir && !t.is_transfer).reduce((s, t) => s + t.amount_cents, 0);
+  const n = listRows.filter((t) => t.is_transfer).length;
+  $("#list-totals").innerHTML = listRows.length
+    ? `${listRows.length} lançamento${listRows.length === 1 ? "" : "s"} · Receitas <b class="in">${brl(sum("entrada"))}</b> · Despesas <b>${brl(sum("saida"))}</b>` +
+      (n ? `<br><small>${n === 1 ? "1 transferência entre contas suas não entra" : `${n} transferências entre contas suas não entram`} nesses totais</small>` : "")
+    : "";
+}
+
+function renderRow(t, row) {
+  const tag = t.source === "manual" ? (t.reconciled ? "manual ✓ conferido" : "manual")
+    : t.external_id ? `${t.source} · Open Finance` : t.source;
+  row.className = "tx" + (t.is_transfer ? " is-transfer" : "");
+  row.innerHTML = `
+    <div class="d"><b>${esc(t.description)}</b>
+      <small>${fmtDate(t.date)} · ${esc(t.bank || "")} · <span class="badge">${tag}</span>${t.is_transfer ? ' <span class="badge transfer">⇄ transferência</span>' : ""}</small>
+      <select class="cat" data-act="category" aria-label="Categoria de ${esc(t.description)}">${
+        (CATEGORIES.includes(t.category) ? CATEGORIES : [t.category, ...CATEGORIES])
+          .map((c) => `<option ${c === t.category ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></div>
+    <div class="amt ${t.direction === "entrada" ? "in" : ""}">${t.direction === "entrada" ? "+" : "−"}${brl(t.amount_cents)}</div>
+    <button class="ghost tbtn ${t.is_transfer ? "on" : ""}" data-act="transfer"
+      title="${t.is_transfer ? "Contar de novo como receita/despesa" : "Marcar como transferência entre contas suas (não conta como receita nem despesa)"}"
+      aria-pressed="${t.is_transfer ? "true" : "false"}">⇄</button>
+    <button class="ghost" data-act="delete" title="Excluir">✕</button>`;
+  row.querySelector('[data-act="transfer"]').onclick = async (e) => {
+    e.currentTarget.disabled = true;
+    try {
+      const updated = await api("/api/transactions/" + t.id, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_transfer: !t.is_transfer }),
+      });
+      Object.assign(t, updated);
+      renderRow(t, row);
+      renderTotals();
+    } catch (err) {
+      alert(err.message);
+      e.currentTarget.disabled = false;
+    }
+  };
+  row.querySelector('[data-act="category"]').onchange = async (e) => {
+    const sel = e.currentTarget, category = sel.value, before = t.category;
+    sel.disabled = true;
+    const patch = (body) => api("/api/transactions/" + t.id, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    try {
+      const updated = await patch({ category });
+      Object.assign(t, updated);
+      // Outros com a mesma descrição: pergunta se aplica a eles e aos próximos que chegarem.
+      if (updated.similar > 0 && confirm(
+        `Mudar também ${updated.similar === 1 ? "o outro lançamento" : `os outros ${updated.similar} lançamentos`} “${t.description}” para ${category}?
+
+Os próximos com essa descrição já virão como ${category}.`)) {
+        await patch({ category, apply_similar: true });
+        await loadList();
+        return;
+      }
+      renderRow(t, row);
+      row.querySelector('[data-act="category"]').insertAdjacentHTML("afterend", '<span class="saved">✓ salvo</span>');
+      setTimeout(() => row.querySelector(".saved")?.remove(), 1500);
+    } catch (err) {
+      alert(err.message);
+      sel.value = before;
+      sel.disabled = false;
+    }
+  };
+  row.querySelector('[data-act="delete"]').onclick = async () => {
+    if (!confirm(`Excluir “${t.description}”?`)) return;
+    await api("/api/transactions/" + t.id, { method: "DELETE" });
+    loadList();
+  };
+}
+
+// Filtros: período (o seletor de mês preenche De/Até), categoria e banco.
+const monthBounds = (m) => {
+  const [y, mo] = m.split("-").map(Number);
+  return [`${m}-01`, `${m}-${String(new Date(y, mo, 0).getDate()).padStart(2, "0")}`];
+};
+function filtersActive() {
+  const [a, b] = $("#month").value ? monthBounds($("#month").value) : ["", ""];
+  return $("#f-cat").value || $("#f-bank").value || $("#f-from").value !== a || $("#f-to").value !== b;
+}
+async function loadList() {
+  const q = new URLSearchParams({ from: $("#f-from").value, to: $("#f-to").value });
+  if ($("#f-cat").value) q.set("category", $("#f-cat").value);
+  if ($("#f-bank").value) q.set("bank", $("#f-bank").value);
+  for (const id of ["#f-cat", "#f-bank"]) $(id).classList.toggle("on", !!$(id).value);
+  $("#f-clear").hidden = !filtersActive();
+  listRows = await api("/api/transactions?" + q);
+  $("#list").innerHTML = listRows.length ? "" : `<p class="muted">Nenhum lançamento com esses filtros.</p>`;
+  for (const t of listRows) {
+    const row = document.createElement("div");
+    renderRow(t, row);
+    $("#list").append(row);
+  }
+  renderTotals();
+}
+function setMonth(m) {
+  const [a, b] = monthBounds(m);
+  $("#f-from").value = a; $("#f-to").value = b;
+}
+$("#month").onchange = () => { if ($("#month").value) setMonth($("#month").value); loadList(); };
+for (const id of ["#f-from", "#f-to"]) {
+  $(id).onchange = () => {
+    // Datas soltas: o seletor de mês só fica preenchido se o período for exatamente um mês.
+    const m = $("#f-from").value.slice(0, 7);
+    const [a, b] = m ? monthBounds(m) : ["", ""];
+    $("#month").value = $("#f-from").value === a && $("#f-to").value === b ? m : "";
+    if ($("#f-from").value && $("#f-to").value) loadList();
+  };
+}
+$("#f-cat").onchange = loadList;
+$("#f-bank").onchange = loadList;
+$("#f-clear").onclick = () => {
+  const now = new Date();
+  $("#month").value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  setMonth($("#month").value);
+  $("#f-cat").value = ""; $("#f-bank").value = "";
+  loadList();
+};
+async function loadFilterOptions() {
+  try {
+    const { banks } = await api("/api/filters");
+    const cur = $("#f-bank").value;
+    $("#f-bank").innerHTML = `<option value="">Todos</option>` + banks.map((b) => `<option ${b === cur ? "selected" : ""}>${esc(b)}</option>`).join("");
+  } catch {}
+}
+
+// ---- Início
+(async () => {
+  const today = new Date();
+  const local = new Date(today - today.getTimezoneOffset() * 60000).toISOString();
+  $("#manual").date.value = local.slice(0, 10);
+  $("#month").value = local.slice(0, 7);
+  setMonth(local.slice(0, 7));
+  try { CATEGORIES = await api("/api/categories"); } catch { return; }
+  loadSync();
+  $("#f-cat").innerHTML = `<option value="">Todas</option>` + CATEGORIES.map((c) => `<option>${esc(c)}</option>`).join("");
+  loadFilterOptions();
+  $("#manual").category.innerHTML = CATEGORIES.map((c) => `<option ${c === "Outros" ? "selected" : ""}>${c}</option>`).join("");
+})();
+</script>
+</body>
+</html>

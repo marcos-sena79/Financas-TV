@@ -1,0 +1,11 @@
+node_modules/
+data/
+.vercel
+.env
+.env.*
+!.env.example
+db.env
+.claude/settings.local.json
+*.pdf
+*.ofx
+*.csv
