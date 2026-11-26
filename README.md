@@ -110,3 +110,12 @@ public/index.html  app do celular
 public/tv.html     dashboard da TV
 test/              testes do fluxo (npm test)
 ```
+
+## Instalar no celular (PWA)
+
+Abra https://financas-tv.vercel.app no celular e entre com a senha.
+- **Android (Chrome):** toque em **Instalar app** no topo (ou menu ⋮ → *Instalar app*).
+- **iPhone (Safari):** toque em **Compartilhar** → **Adicionar à Tela de Início**.
+
+O app ganha ícone próprio e abre em tela cheia. Os ícones saem de `node scripts/make-icons.js`;
+ao mudar `public/sw.js`, suba a constante `VERSION` para os celulares trocarem o cache.
